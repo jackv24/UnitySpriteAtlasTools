@@ -1,5 +1,0 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
-    <ui:Label text="SpriteAtlasName" display-tooltip-when-elided="true" enable-rich-text="false" name="SpriteAtlasName" />
-    <ui:VisualElement style="justify-content: center; flex-grow: 1; min-width: auto; min-height: 150px; align-items: center;" />
-    <ui:Label text="W x H px" display-tooltip-when-elided="true" name="SizeInfo" />
-</ui:UXML>
