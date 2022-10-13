@@ -1,17 +1,22 @@
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.U2D;
 using UnityEngine.UIElements;
 
 namespace SpriteAtlasTools.Editor
 {
     public class SpriteAtlasEditorWindow : EditorWindow
     {
-        [MenuItem("Tools/Sprite Atlas Tools/SpriteAtlas Editor")]
-        public static void ShowExample()
+        public static SpriteAtlasEditorWindow Show(SpriteAtlas atlas)
         {
-            var wnd = GetWindow<SpriteAtlasEditorWindow>();
+            var wnd = CreateInstance<SpriteAtlasEditorWindow>();
             wnd.titleContent = new GUIContent("SpriteAtlas Editor");
+            wnd.atlas = atlas;
+            wnd.Show();
+            return wnd;
         }
+
+        private SpriteAtlas atlas;
 
         public void CreateGUI()
         {
@@ -22,6 +27,12 @@ namespace SpriteAtlasTools.Editor
             var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
                 "Packages/com.jackvine.unity.spriteatlastools/Editor/SpriteAtlasEditorWindow.uxml");
             visualTree.CloneTree(root);
+
+            if (!atlas)
+                return;
+
+            var atlasName = root.Q<Label>("SpriteAtlasName");
+            atlasName.text = atlas.name;
 
             var tex = new Texture2D(50, 50);
             for (int x = 0; x < tex.width; x++)
