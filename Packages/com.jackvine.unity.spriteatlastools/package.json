@@ -1,0 +1,12 @@
+{
+  "name": "com.jackvine.unity.spriteatlastools",
+  "version": "0.1.0",
+  "displayName": "Sprite Atlas Tools",
+  "description": "A collection of tools that make working with Sprite Atlases easier.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Jack Vine",
+    "email": "jackv24@users.noreply.github.com",
+    "url": "https://jackvine.com/"
+  }
+}
