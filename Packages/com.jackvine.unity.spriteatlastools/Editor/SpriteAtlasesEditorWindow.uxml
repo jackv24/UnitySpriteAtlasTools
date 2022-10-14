@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
+    <ui:VisualElement name="Columns" style="flex-grow: 1; flex-direction: row;">
+        <ui:VisualElement name="AtlasListColumn" style="max-width: 200px; min-width: 50px; flex-grow: 1;">
+            <uie:Toolbar>
+                <uie:ToolbarButton text="Refresh" display-tooltip-when-elided="true" name="RefreshButton" style="flex-shrink: 0;" />
+                <uie:ToolbarSearchField focusable="true" name="AtlasListSearchField" style="width: auto; min-width: auto; min-height: auto; flex-shrink: 1;" />
+            </uie:Toolbar>
+            <ui:ListView focusable="true" name="AtlasListView" selection-type="Multiple" style="flex-grow: 1;" />
+        </ui:VisualElement>
+        <ui:VisualElement name="SelectedAtlasesColumn" style="flex-grow: 1;" />
+    </ui:VisualElement>
+</ui:UXML>

@@ -40,11 +40,9 @@ SpriteAtlas:
   m_PackedSprites:
   - {fileID: 21300000, guid: 5e707cb060244f94cb76d35c243f032c, type: 3}
   - {fileID: 21300000, guid: 81e9b0660fcc6b542a9fc46665fdf1e5, type: 3}
-  - {fileID: 21300000, guid: 6a75164c5baa81143877a998144ba16a, type: 3}
   m_PackedSpriteNamesToIndex:
   - orange_oval
   - blue_square
-  - cyan_squiggle
   m_RenderDataMap: {}
   m_Tag: AtlasA
   m_IsVariant: 0
