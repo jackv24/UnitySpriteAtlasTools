@@ -5,7 +5,7 @@
                 <uie:ToolbarButton text="Refresh" display-tooltip-when-elided="true" name="RefreshButton" style="flex-shrink: 0;" />
                 <uie:ToolbarSearchField focusable="true" name="AtlasListSearchField" style="width: auto; min-width: auto; min-height: auto; flex-shrink: 1;" />
             </uie:Toolbar>
-            <ui:ListView focusable="true" name="AtlasListView" selection-type="Multiple" style="flex-grow: 1;" />
+            <ui:ListView focusable="true" name="AtlasListView" selection-type="Multiple" show-border="true" style="flex-grow: 1;" />
         </ui:VisualElement>
         <ui:VisualElement name="SelectedAtlasesColumn" style="flex-grow: 1;" />
     </ui:VisualElement>

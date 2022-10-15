@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
@@ -49,7 +50,7 @@ namespace SpriteAtlasTools.Editor
                 selectedAtlasViewParent.Clear();
             }
 
-            void ShowSelectedAtlasView(string atlasName, Texture2D texture, IEnumerable<Sprite> sprites)
+            void ShowSelectedAtlasView(SpriteAtlas atlas, Texture2D atlasTexture, IEnumerable<Sprite> sprites)
             {
                 // Create atlas view
                 var atlasView = atlasViewAsset.Instantiate();
@@ -57,21 +58,22 @@ namespace SpriteAtlasTools.Editor
                 container.style.flexGrow = new StyleFloat(1);
 
                 var nameLabel = atlasView.Q<Label>("NameLabel");
-                nameLabel.text = atlasName;
+                nameLabel.text = atlas.name;
 
                 var textureView = atlasView.Q<VisualElement>("TextureView");
-                textureView.style.backgroundImage = Background.FromTexture2D(texture);
+                textureView.style.backgroundImage = Background.FromTexture2D(atlasTexture);
 
-                Sprite selectedSprite = null;
+                var selectedSprites = new List<Sprite>();
 
+                // Show selected sprites in texture
                 textureView.generateVisualContent = context =>
                 {
                     var size = context.visualElement.contentRect.size;
 
                     foreach (var sprite in sprites)
                     {
-                        var color = selectedSprite == sprite ? Color.magenta : Color.blue;
-                        color.a = 0.2f;
+                        if (!selectedSprites.Contains(sprite))
+                            continue;
 
                         Vector2[] spriteUvs;
                         try
@@ -88,7 +90,7 @@ namespace SpriteAtlasTools.Editor
                             .Select(v => new Vertex
                             {
                                 position = new Vector3(v.x * size.x, (1 - v.y) * size.y, Vertex.nearZ),
-                                tint = color,
+                                tint = new Color(0, 0.5f, 1.0f, 0.15f),
                             })
                             .ToArray();
 
@@ -99,37 +101,92 @@ namespace SpriteAtlasTools.Editor
                 };
 
                 // Handle mouse over on texture
-                textureView.RegisterCallback<MouseMoveEvent>(evt =>
-                {
-                    var mousePos = evt.localMousePosition;
-                    var viewSize = textureView.localBound.size;
+                // textureView.RegisterCallback<MouseMoveEvent>(
+                //     evt =>
+                //     {
+                //         var mousePos = evt.localMousePosition;
+                //         var viewSize = textureView.localBound.size;
+                //
+                //         // TODO: Account for background scaling within view
+                //         var mousePosUV = new Vector2(mousePos.x / viewSize.x, mousePos.y / viewSize.y);
+                //
+                //         //Debug.Log($"mousePos: {mousePos}, viewSize: {viewSize}, mousePosUV: {mousePosUV}");
+                //
+                //         foreach (var sprite in sprites)
+                //         {
+                //             if (!IsPointInPolygon(mousePosUV, sprite.uv))
+                //             {
+                //                 if (selectedSprite == sprite)
+                //                 {
+                //                     selectedSprite = null;
+                //                     textureView.MarkDirtyRepaint();
+                //                 }
+                //             }
+                //             else if (selectedSprite != sprite)
+                //             {
+                //                 selectedSprite = sprite;
+                //                 textureView.MarkDirtyRepaint();
+                //             }
+                //
+                //             //Debug.Log($"Mouse pos: {mousePos}, UV: {mousePosUV}");
+                //             //Debug.Log($"Mouse inside sprite: {sprite.name}");
+                //         }
+                //     });
 
-                    // TODO: Account for background scaling within view
-                    var mousePosUV = new Vector2(
-                        mousePos.x / viewSize.x,
-                        mousePos.y / viewSize.y);
-
-                    //Debug.Log($"mousePos: {mousePos}, viewSize: {viewSize}, mousePosUV: {mousePosUV}");
-
-                    foreach (var sprite in sprites)
+                // Resize texture view within container to keep aspect
+                var textureContainer = atlasView.Q<VisualElement>("TextureContainer");
+                textureContainer.RegisterCallback<GeometryChangedEvent>(
+                    evt =>
                     {
-                        if (!IsPointInPolygon(mousePosUV, sprite.uv))
+                        var size = evt.newRect.size;
+
+                        float scaleUpX = size.x / atlasTexture.width;
+                        float scaleUpY = size.y / atlasTexture.height;
+
+                        float scaleUp = Mathf.Min(scaleUpX, scaleUpY);
+
+                        textureView.style.width = atlasTexture.width * scaleUp;
+                        textureView.style.height = atlasTexture.height * scaleUp;
+                    });
+
+                // Setup atlas sprite list
+                var packables = atlas.GetPackables();
+
+                var spriteListView = atlasView.Q<ListView>("SpriteListView");
+                spriteListView.makeItem = () => new Label();
+                spriteListView.bindItem = (element, i) =>
+                {
+                    var packable = packables[i];
+                    ((Label)element).text = $"{packable.name} ({packable.GetType().GetTypeInfo().Name})";
+                };
+                spriteListView.itemsSource = packables;
+                spriteListView.onSelectionChange += objects =>
+                {
+                    selectedSprites.Clear();
+
+                    // Selecting textures can show in atlas texture view
+                    foreach (UnityEngine.Object obj in objects)
+                    {
+                        string assetPath = AssetDatabase.GetAssetPath(obj);
+
+                        switch (obj)
                         {
-                            if (selectedSprite == sprite)
-                            {
-                                selectedSprite = null;
-                                textureView.MarkDirtyRepaint();
-                            }
+                            case Texture2D:
+                                var texSprites = AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Sprite>();
+                                selectedSprites.AddRange(texSprites);
+                                break;
+
+                            case DefaultAsset:
+                                var folderSprites = Directory.GetFiles(assetPath)
+                                    .SelectMany(AssetDatabase.LoadAllAssetsAtPath)
+                                    .OfType<Sprite>();
+                                selectedSprites.AddRange(folderSprites);
+                                break;
                         }
-                        else if (selectedSprite != sprite)
-                        {
-                            selectedSprite = sprite;
-                            textureView.MarkDirtyRepaint();
-                        }
-                        //Debug.Log($"Mouse pos: {mousePos}, UV: {mousePosUV}");
-                        //Debug.Log($"Mouse inside sprite: {sprite.name}");
                     }
-                });
+
+                    textureView.MarkDirtyRepaint();
+                };
 
                 selectedAtlasViewParent.Add(atlasView);
             }
@@ -166,7 +223,7 @@ namespace SpriteAtlasTools.Editor
                         var sprites = getSpritesMethod!.Invoke(null, new object[] { atlas }) as Sprite[];
 
                         // TODO: Multiple preview textures display
-                        ShowSelectedAtlasView(atlasPath, previewTextures[0], sprites);
+                        ShowSelectedAtlasView(atlas, previewTextures[0], sprites);
                     };
                 }
             };
