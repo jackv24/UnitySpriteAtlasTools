@@ -16,7 +16,7 @@ namespace SpriteAtlasTools.Editor
     public class SpriteAtlasesEditorWindow : EditorWindow
     {
         private List<string> atlasPaths;
-        private string searchTerm;
+        private string atlasSearchTerm;
 
         [MenuItem("Tools/SpriteAtlases Editor")]
         public static void ShowExample()
@@ -150,7 +150,20 @@ namespace SpriteAtlasTools.Editor
                     });
 
                 // Setup atlas sprite list
-                var packables = atlas.GetPackables();
+                List<UnityEngine.Object> GetPackablesSorted(string searchTerm)
+                {
+                    IEnumerable<UnityEngine.Object> newPackables = atlas.GetPackables();
+
+                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                        newPackables = newPackables.Where(obj => obj.name.ToLower().Contains(searchTerm));
+
+                    // Sort packables by name
+                    return newPackables
+                        .OrderBy(obj => obj.name)
+                        .ToList();
+                }
+
+                var packables = GetPackablesSorted(null);
 
                 var spriteListView = atlasView.Q<ListView>("SpriteListView");
                 spriteListView.makeItem = () => new Label();
@@ -188,18 +201,30 @@ namespace SpriteAtlasTools.Editor
                     textureView.MarkDirtyRepaint();
                 };
 
+                var spriteSearchField = atlasView.Q<ToolbarSearchField>("SpriteSearchField");
+                spriteSearchField.RegisterValueChangedCallback(evt =>
+                {
+                    string searchTerm = evt.newValue.ToLower();
+                    packables.Clear();
+                    packables.AddRange(GetPackablesSorted(searchTerm));
+                    spriteListView.RefreshItems();
+                });
+
                 selectedAtlasViewParent.Add(atlasView);
             }
 
             var atlasListView = root.Q<ListView>("AtlasListView");
             atlasListView.makeItem = () => new Label();
-            atlasListView.bindItem = (element, i) => ((Label)element).text = atlasPaths[i];
+            atlasListView.bindItem = (element, i) =>
+                ((Label)element).text = Path.GetFileNameWithoutExtension(atlasPaths[i]);
             atlasListView.itemsSource = atlasPaths;
             atlasListView.onSelectionChange += objects =>
             {
                 ClearAtlasView();
 
-                foreach (string atlasPath in objects)
+                var sorted = objects.OfType<string>().OrderBy(Path.GetFileNameWithoutExtension);
+
+                foreach (string atlasPath in sorted)
                 {
                     var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
 
@@ -238,10 +263,10 @@ namespace SpriteAtlasTools.Editor
             var refreshButton = root.Q<Button>("RefreshButton");
             refreshButton.clicked += RefreshAtlasList;
 
-            var searchField = root.Q<ToolbarSearchField>("AtlasListSearchField");
-            searchField.RegisterValueChangedCallback(evt =>
+            var atlasSearchField = root.Q<ToolbarSearchField>("AtlasListSearchField");
+            atlasSearchField.RegisterValueChangedCallback(evt =>
             {
-                searchTerm = evt.newValue;
+                atlasSearchTerm = evt.newValue;
                 RefreshAtlasList();
             });
         }
@@ -256,10 +281,11 @@ namespace SpriteAtlasTools.Editor
                     if (string.IsNullOrEmpty(path))
                         return false;
 
-                    if (string.IsNullOrWhiteSpace(searchTerm))
+                    if (string.IsNullOrWhiteSpace(atlasSearchTerm))
                         return true;
 
-                    return path.ToLower().Contains(searchTerm.ToLower());
+                    string fileName = Path.GetFileNameWithoutExtension(path);
+                    return fileName.ToLower().Contains(atlasSearchTerm.ToLower());
                 });
         }
 

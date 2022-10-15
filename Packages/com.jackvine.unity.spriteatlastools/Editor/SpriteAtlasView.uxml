@@ -1,4 +1,4 @@
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
     <ui:VisualElement style="flex-grow: 1; flex-direction: row;">
         <ui:VisualElement name="AtlasColumn" style="flex-grow: 1; flex-shrink: 1;">
             <ui:Label text="Name" display-tooltip-when-elided="true" name="NameLabel" />
@@ -7,6 +7,9 @@
             </ui:VisualElement>
         </ui:VisualElement>
         <ui:VisualElement name="SpriteListColumn" style="max-width: 200px; min-width: 50px; flex-shrink: 0; flex-grow: 1;">
+            <uie:Toolbar>
+                <uie:ToolbarSearchField focusable="true" name="SpriteSearchField" style="flex-shrink: 1;" />
+            </uie:Toolbar>
             <ui:ListView focusable="true" name="SpriteListView" selection-type="Multiple" show-border="true" style="flex-grow: 1;" />
         </ui:VisualElement>
     </ui:VisualElement>
