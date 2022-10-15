@@ -2,11 +2,12 @@
   "name": "com.jackvine.unity.spriteatlastools",
   "version": "0.1.0",
   "displayName": "Sprite Atlas Tools",
-  "description": "A collection of tools that make working with Sprite Atlases easier.",
+  "description": "A collection of tools that make working with Sprite Atlases easier.\n\nNOTE: 2021.3.10f1 required to fix crash bug when calling SpriteAtlasUtility.PackAtlases",
   "unity": "2021.3",
   "author": {
     "name": "Jack Vine",
     "email": "jackv24@users.noreply.github.com",
     "url": "https://jackvine.com/"
-  }
+  },
+  "unityRelease": "10f1"
 }

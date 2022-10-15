@@ -39,5 +39,5 @@ SpriteAtlas:
   m_PackedSprites: []
   m_PackedSpriteNamesToIndex: []
   m_RenderDataMap: {}
-  m_Tag: AtlasDummy
+  m_Tag: AtlasDummy 7
   m_IsVariant: 0
