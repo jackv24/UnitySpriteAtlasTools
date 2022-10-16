@@ -60,6 +60,12 @@ namespace SpriteAtlasTools.Editor
                 var nameLabel = atlasView.Q<Label>("NameLabel");
                 nameLabel.text = atlas.name;
 
+                var infoLabel = atlasView.Q<Label>("TextureInfoLabel");
+                infoLabel.text = $"{atlasTexture.width} x {atlasTexture.height} px - {atlasTexture.graphicsFormat}";
+
+                var hoveredSpriteLabel = atlasView.Q<Label>("HoveredSpriteLabel");
+                hoveredSpriteLabel.text = null;
+
                 var textureView = atlasView.Q<VisualElement>("TextureView");
                 textureView.style.backgroundImage = Background.FromTexture2D(atlasTexture);
 
@@ -135,44 +141,26 @@ namespace SpriteAtlasTools.Editor
                                 continue;
                             }
 
-                            var polygons = PolygonsFromSpriteMesh(spriteUvs, sprite.triangles);
-
-                            foreach (var polygon in polygons)
+                            var polygon = ConvexHull.ComputeConvexHull(spriteUvs).ToArray();
+                            if (IsPointInPolygon(mousePosUV, polygon))
                             {
-                                if (IsPointInPolygon(mousePosUV, polygon))
+                                if (hoveredSprite != sprite)
                                 {
-                                    if (hoveredSprite != sprite)
-                                    {
-                                        hoveredSprite = sprite;
-                                        textureView.MarkDirtyRepaint();
-                                    }
+                                    hoveredSprite = sprite;
+                                    hoveredSpriteLabel.text = hoveredSprite.name;
+                                    textureView.MarkDirtyRepaint();
                                 }
-                                else
+                            }
+                            else
+                            {
+                                if (hoveredSprite == sprite)
                                 {
-                                    if (hoveredSprite == sprite)
-                                    {
-                                        hoveredSprite = null;
-                                        textureView.MarkDirtyRepaint();
-                                    }
+                                    hoveredSprite = null;
+                                    hoveredSpriteLabel.text = null;
+                                    textureView.MarkDirtyRepaint();
                                 }
                             }
                         }
-                    });
-
-                // Resize texture view within container to keep aspect
-                var textureContainer = atlasView.Q<VisualElement>("TextureContainer");
-                textureContainer.RegisterCallback<GeometryChangedEvent>(
-                    evt =>
-                    {
-                        var size = evt.newRect.size;
-
-                        float scaleUpX = size.x / atlasTexture.width;
-                        float scaleUpY = size.y / atlasTexture.height;
-
-                        float scaleUp = Mathf.Min(scaleUpX, scaleUpY);
-
-                        textureView.style.width = atlasTexture.width * scaleUp;
-                        textureView.style.height = atlasTexture.height * scaleUp;
                     });
 
                 // Setup atlas sprite list
@@ -192,12 +180,8 @@ namespace SpriteAtlasTools.Editor
                 var packables = GetPackablesSorted(null);
 
                 var spriteListView = atlasView.Q<ListView>("SpriteListView");
-                spriteListView.makeItem = () => new Label();
-                spriteListView.bindItem = (element, i) =>
-                {
-                    var packable = packables[i];
-                    ((Label)element).text = $"{packable.name} ({packable.GetType().GetTypeInfo().Name})";
-                };
+                spriteListView.makeItem = () => new AssetListItemElement();
+                spriteListView.bindItem = (element, i) => ((AssetListItemElement)element).AssetObject = packables[i];
                 spriteListView.itemsSource = packables;
                 spriteListView.onSelectionChange += objects =>
                 {
@@ -219,46 +203,84 @@ namespace SpriteAtlasTools.Editor
                     spriteListView.RefreshItems();
                 });
 
+                // Resize texture view within container to keep aspect
+                var textureContainer = atlasView.Q<VisualElement>("TextureContainer");
+                textureContainer.RegisterCallback<GeometryChangedEvent>(
+                    evt =>
+                    {
+                        var size = evt.newRect.size;
+
+                        float scaleUpX = size.x / atlasTexture.width;
+                        float scaleUpY = size.y / atlasTexture.height;
+
+                        float scaleUp = Mathf.Min(scaleUpX, scaleUpY);
+
+                        textureView.style.width = atlasTexture.width * scaleUp;
+                        textureView.style.height = atlasTexture.height * scaleUp;
+
+                        // To fix top listview from taking all available space, leaving none for others
+                        spriteListView.style.maxHeight = size.y;
+                    });
+
                 // Select hovered sprite on mouse down
                 textureView.RegisterCallback<MouseDownEvent>(
                     evt =>
                     {
-                        if (!hoveredSprite)
+                        // Left button pressed
+                        if (evt.button == 0)
                         {
-                            selectedSprites.Clear();
+                            if (!hoveredSprite)
+                            {
+                                selectedSprites.Clear();
+                                textureView.MarkDirtyRepaint();
+                                spriteListView.ClearSelection();
+                                return;
+                            }
+
+                            // Only clear selection if not holding control
+                            if ((evt.modifiers & EventModifiers.Control) == 0)
+                                selectedSprites.Clear();
+
+                            // Toggle inside
+                            if (selectedSprites.Contains(hoveredSprite))
+                                selectedSprites.Remove(hoveredSprite);
+                            else
+                                selectedSprites.Add(hoveredSprite);
+
                             textureView.MarkDirtyRepaint();
-                            spriteListView.ClearSelection();
-                            return;
+
+                            // Get selected packables from selected sprites
+                            var selectedIndices = GetSpritesForPackables(packables)
+                                // Get packables that contain sprites that are selected
+                                .Where(kvp => kvp.Value.Any(s => selectedSprites.Contains(s)))
+                                .Select(kvp => kvp.Key)
+                                .Select(v => packables.IndexOf(v));
+                            spriteListView.SetSelection(selectedIndices);
                         }
+                        // Right button pressed
+                        else if (evt.button == 1)
+                        {
+                            // Get packable from hovered sprite
+                            var hoveredPackable = GetSpritesForPackables(packables)
+                                .First(kvp => kvp.Value.Any(s => s == hoveredSprite))
+                                .Key;
 
-                        // Only clear selection if not holding control
-                        if ((evt.modifiers & EventModifiers.Control) == 0)
-                            selectedSprites.Clear();
+                            string path = AssetDatabase.GetAssetPath(hoveredPackable);
+                            if (string.IsNullOrEmpty(path))
+                                return;
 
-                        // Toggle inside
-                        if (selectedSprites.Contains(hoveredSprite))
-                            selectedSprites.Remove(hoveredSprite);
-                        else
-                            selectedSprites.Add(hoveredSprite);
-
-                        textureView.MarkDirtyRepaint();
-
-                        // Get selected packables from selected sprites
-                        var selectedIndices = GetSpritesForPackables(packables)
-                            // Get packables that contain sprites that are selected
-                            .Where(kvp => kvp.Value.Any(s => selectedSprites.Contains(s)))
-                            .Select(kvp => kvp.Key)
-                            .Select(v => packables.IndexOf(v));
-                        spriteListView.SetSelection(selectedIndices);
+                            EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path));
+                        }
                     });
 
                 selectedAtlasViewParent.Add(atlasView);
             }
 
             var atlasListView = root.Q<ListView>("AtlasListView");
-            atlasListView.makeItem = () => new Label();
+            atlasListView.makeItem = () => new AssetListItemElement(false);
             atlasListView.bindItem = (element, i) =>
-                ((Label)element).text = Path.GetFileNameWithoutExtension(atlasPaths[i]);
+                ((AssetListItemElement)element).AssetObject =
+                AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(atlasPaths[i]);
             atlasListView.itemsSource = atlasPaths;
             atlasListView.onSelectionChange += objects =>
             {
@@ -306,6 +328,7 @@ namespace SpriteAtlasTools.Editor
             refreshButton.clicked += RefreshAtlasList;
 
             var atlasSearchField = root.Q<ToolbarSearchField>("AtlasListSearchField");
+            atlasSearchField.SetValueWithoutNotify(atlasSearchTerm);
             atlasSearchField.RegisterValueChangedCallback(evt =>
             {
                 atlasSearchTerm = evt.newValue;
@@ -364,106 +387,36 @@ namespace SpriteAtlasTools.Editor
         private static bool IsPointInPolygon(Vector2 point, Vector2[] polygon)
         {
             int polygonLength = polygon.Length, i = 0;
+
+            if (polygonLength <= 0)
+            {
+                Debug.LogError("Polygon point array has length 0!");
+                return false;
+            }
+
             bool inside = false;
+
             // x, y for tested point.
             float pointX = point.x, pointY = point.y;
+
             // start / end point for the current polygon segment.
-            float startX, startY, endX, endY;
             var endPoint = polygon[polygonLength - 1];
-            endX = endPoint.x;
-            endY = endPoint.y;
+            float endX = endPoint.x;
+            float endY = endPoint.y;
             while (i < polygonLength)
             {
-                startX = endX;
-                startY = endY;
+                float startX = endX;
+                float startY = endY;
                 endPoint = polygon[i++];
                 endX = endPoint.x;
                 endY = endPoint.y;
-                //
+
                 inside ^= (endY > pointY ^ startY > pointY) /* ? pointY inside [startY;endY] segment ? */
                           && /* if so, test if it is under the segment */
                           ((pointX - endX) < (pointY - endY) * (startX - endX) / (startY - endY));
             }
 
             return inside;
-        }
-
-        // Edited from: https://www.h3xed.com/programming/automatically-create-polygon-collider-2d-from-2d-mesh-in-unity
-        private static Vector2[][] PolygonsFromSpriteMesh(Vector2[] vertices, ushort[] triangles)
-        {
-            // Get just the outer edges from the mesh's triangles (ignore or remove any shared edges)
-            var edges = new Dictionary<string, KeyValuePair<int, int>>();
-            for (int i = 0; i < triangles.Length; i += 3)
-            {
-                for (int e = 0; e < 3; e++)
-                {
-                    ushort vert1 = triangles[i + e];
-                    ushort vert2 = triangles[i + e + 1 > i + 2 ? i : i + e + 1];
-                    string edge = Mathf.Min(vert1, vert2) + ":" + Mathf.Max(vert1, vert2);
-                    if (edges.ContainsKey(edge))
-                    {
-                        edges.Remove(edge);
-                    }
-                    else
-                    {
-                        edges.Add(edge, new KeyValuePair<int, int>(vert1, vert2));
-                    }
-                }
-            }
-
-            // Create edge lookup (Key is first vertex, Value is second vertex, of each edge)
-            var lookup = new Dictionary<int, int>();
-            foreach ((int key, int value) in edges.Values)
-            {
-                if (lookup.ContainsKey(key) == false)
-                    lookup.Add(key, value);
-            }
-
-            var currentPaths = new List<Vector2[]>();
-
-            // Loop through edge vertices in order
-            int startVert = 0;
-            int nextVert = startVert;
-            int highestVert = startVert;
-            var colliderPath = new List<Vector2>();
-            while (true)
-            {
-                // Add vertex to collider path
-                colliderPath.Add(vertices[nextVert]);
-
-                // Get next vertex
-                nextVert = lookup[nextVert];
-
-                // Store highest vertex (to know what shape to move to next)
-                if (nextVert > highestVert)
-                {
-                    highestVert = nextVert;
-                }
-
-                // Shape complete
-                if (nextVert == startVert)
-                {
-                    // Add path to polygon collider
-                    currentPaths.Add(colliderPath.ToArray());
-                    colliderPath.Clear();
-
-                    // Go to next shape if one exists
-                    if (lookup.ContainsKey(highestVert + 1))
-                    {
-                        // Set starting and next vertices
-                        startVert = highestVert + 1;
-                        nextVert = startVert;
-
-                        // Continue to next loop
-                        continue;
-                    }
-
-                    // No more verts
-                    break;
-                }
-            }
-
-            return currentPaths.ToArray();
         }
     }
 }

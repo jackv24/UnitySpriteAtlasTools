@@ -1,16 +1,20 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
-    <ui:VisualElement style="flex-grow: 1; flex-direction: row;">
+    <ui:VisualElement name="Container" style="flex-direction: row; margin-left: 4px; margin-right: 4px; margin-top: 4px; margin-bottom: 4px; border-left-width: 1px; border-right-width: 1px; border-top-width: 1px; border-bottom-width: 1px; border-left-color: rgb(118, 118, 118); border-right-color: rgb(118, 118, 118); border-top-color: rgb(118, 118, 118); border-bottom-color: rgb(118, 118, 118); border-top-left-radius: 2px; border-bottom-left-radius: 2px; border-top-right-radius: 2px; border-bottom-right-radius: 2px; flex-grow: 1;">
         <ui:VisualElement name="AtlasColumn" style="flex-grow: 1; flex-shrink: 1;">
-            <ui:Label text="Name" display-tooltip-when-elided="true" name="NameLabel" />
+            <ui:VisualElement name="TitleContainer" style="flex-direction: row; justify-content: space-between;">
+                <ui:Label text="Name" display-tooltip-when-elided="true" name="NameLabel" />
+                <ui:Label text="Width x Height px" display-tooltip-when-elided="true" name="TextureInfoLabel" />
+            </ui:VisualElement>
             <ui:VisualElement name="TextureContainer" style="flex-grow: 1; align-items: center; justify-content: center;">
                 <ui:VisualElement name="TextureView" style="background-color: rgb(36, 36, 36);" />
             </ui:VisualElement>
+            <ui:Label text="Hovered Sprite Name" display-tooltip-when-elided="true" name="HoveredSpriteLabel" style="-unity-text-align: upper-center;" />
         </ui:VisualElement>
-        <ui:VisualElement name="SpriteListColumn" style="max-width: 200px; min-width: 50px; flex-shrink: 0; flex-grow: 1;">
+        <ui:VisualElement name="SpriteListColumn" style="max-width: 200px; min-width: 50px; flex-shrink: 1;">
             <uie:Toolbar>
                 <uie:ToolbarSearchField focusable="true" name="SpriteSearchField" style="flex-shrink: 1;" />
             </uie:Toolbar>
-            <ui:ListView focusable="true" name="SpriteListView" selection-type="Multiple" show-border="true" style="flex-grow: 1;" />
+            <ui:ListView focusable="true" name="SpriteListView" selection-type="Multiple" show-border="true" text="Hovered Sprite Name" fixed-item-height="20" style="flex-grow: 1;" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
