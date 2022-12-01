@@ -8,8 +8,9 @@ using UnityEditor.Sprites;
 using UnityEditor.U2D;
 using UnityEditor.UIElements;
 using UnityEngine;
-using UnityEngine.UIElements;
 using UnityEngine.U2D;
+using UnityEngine.UIElements;
+using Object = UnityEngine.Object;
 
 namespace SpriteAtlasTools.Editor
 {
@@ -17,6 +18,9 @@ namespace SpriteAtlasTools.Editor
     {
         private List<string> atlasPaths;
         private string atlasSearchTerm;
+
+        private SpriteAtlas dragFromAtlas;
+        private List<Object> dragFromList;
 
         [MenuItem("Tools/SpriteAtlases Editor")]
         public static void ShowExample()
@@ -50,6 +54,57 @@ namespace SpriteAtlasTools.Editor
                 selectedAtlasViewParent.Clear();
             }
 
+            void OnAtlasListViewSelectionChange(IEnumerable<object> objects)
+            {
+                ClearAtlasView();
+
+                var sorted = objects.OfType<string>().OrderBy(Path.GetFileNameWithoutExtension);
+
+                foreach (string atlasPath in sorted)
+                {
+                    var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
+
+                    // Will crash editor if packing happens right now
+                    EditorApplication.delayCall += () =>
+                    {
+                        PackAtlasPreview(atlas, out var previewTextures, out var sprites);
+                        ShowSelectedAtlasView(
+                            atlas,
+                            previewTextures.Length > 0 ? previewTextures[0] : null,
+                            sprites ?? Enumerable.Empty<Sprite>());
+                    };
+                }
+            }
+
+            var atlasListView = root.Q<ListView>("AtlasListView");
+            atlasListView.makeItem = () => new AssetListItemElement(false);
+            atlasListView.bindItem = (element, i) =>
+                ((AssetListItemElement)element).AssetObject =
+                AssetDatabase.LoadAssetAtPath<Object>(atlasPaths[i]);
+            atlasListView.itemsSource = atlasPaths;
+
+            void PackAtlasPreview(SpriteAtlas atlas, out Texture2D[] previewTextures, out Sprite[] sprites)
+            {
+                SpriteAtlasUtility.PackAtlases(new[] { atlas }, EditorUserBuildSettings.activeBuildTarget);
+
+                var getPreviewMethod = typeof(SpriteAtlasExtensions).GetMethod(
+                    "GetPreviewTextures",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+
+                previewTextures = getPreviewMethod!.Invoke(null, new object[] { atlas }) as Texture2D[];
+                if (previewTextures == null || previewTextures.Length == 0)
+                {
+                    sprites = null;
+                    return;
+                }
+
+                var getSpritesMethod = typeof(SpriteAtlasExtensions).GetMethod(
+                    "GetPackedSprites",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+
+                sprites = getSpritesMethod!.Invoke(null, new object[] { atlas }) as Sprite[];
+            }
+
             void ShowSelectedAtlasView(SpriteAtlas atlas, Texture2D atlasTexture, IEnumerable<Sprite> sprites)
             {
                 // Create atlas view
@@ -61,15 +116,19 @@ namespace SpriteAtlasTools.Editor
                 nameLabel.text = atlas.name;
 
                 var infoLabel = atlasView.Q<Label>("TextureInfoLabel");
-                infoLabel.text = $"{atlasTexture.width} x {atlasTexture.height} px - {atlasTexture.graphicsFormat}";
+                infoLabel.text = atlasTexture
+                    ? $"{atlasTexture.width} x {atlasTexture.height} px - {atlasTexture.graphicsFormat}"
+                    : "no texture";
 
                 var hoveredSpriteLabel = atlasView.Q<Label>("HoveredSpriteLabel");
                 hoveredSpriteLabel.text = null;
 
                 var textureView = atlasView.Q<VisualElement>("TextureView");
-                textureView.style.backgroundImage = Background.FromTexture2D(atlasTexture);
+                if (atlasTexture)
+                    textureView.style.backgroundImage = Background.FromTexture2D(atlasTexture);
 
                 Sprite hoveredSprite = null;
+                var selectedPackables = new List<Object>();
                 var selectedSprites = new List<Sprite>();
 
                 // Show selected sprites in texture
@@ -97,7 +156,7 @@ namespace SpriteAtlasTools.Editor
                         }
                         catch (Exception e)
                         {
-                            Debug.LogError($"Exception getting UVs for \"{sprite.name}\": {e}");
+                            //Debug.LogError($"Exception getting UVs for \"{sprite.name}\": {e}");
                             continue;
                         }
 
@@ -137,7 +196,7 @@ namespace SpriteAtlasTools.Editor
                             }
                             catch (Exception e)
                             {
-                                Debug.LogError($"Exception getting UVs for \"{sprite.name}\": {e}");
+                                //Debug.LogError($"Exception getting UVs for \"{sprite.name}\": {e}");
                                 continue;
                             }
 
@@ -164,9 +223,9 @@ namespace SpriteAtlasTools.Editor
                     });
 
                 // Setup atlas sprite list
-                List<UnityEngine.Object> GetPackablesSorted(string searchTerm)
+                List<Object> GetPackablesSorted(string searchTerm)
                 {
-                    IEnumerable<UnityEngine.Object> newPackables = atlas.GetPackables();
+                    IEnumerable<Object> newPackables = atlas.GetPackables();
 
                     if (!string.IsNullOrWhiteSpace(searchTerm))
                         newPackables = newPackables.Where(obj => obj.name.ToLower().Contains(searchTerm));
@@ -185,14 +244,46 @@ namespace SpriteAtlasTools.Editor
                 spriteListView.itemsSource = packables;
                 spriteListView.onSelectionChange += objects =>
                 {
+                    selectedPackables.Clear();
+                    selectedPackables.AddRange(objects.OfType<Object>());
                     selectedSprites.Clear();
 
-                    var spriteDict = GetSpritesForPackables(objects.OfType<UnityEngine.Object>());
+                    var spriteDict = GetSpritesForPackables(selectedPackables);
                     var newSprites = spriteDict.SelectMany(kvp => kvp.Value);
                     selectedSprites.AddRange(newSprites);
 
                     textureView.MarkDirtyRepaint();
                 };
+
+                spriteListView.RegisterCallback<PointerDownEvent>(
+                    evt =>
+                    {
+                        dragFromList = selectedPackables;
+                        dragFromAtlas = atlas;
+                    });
+
+                spriteListView.RegisterCallback<PointerUpEvent>(
+                    evt =>
+                    {
+                        if (atlas == null)
+                            return;
+
+                        // Clear drag if dropped on same list
+                        if (dragFromAtlas == atlas)
+                            return;
+
+                        // Remove selected from old atlas and add to new atlas
+                        var add = dragFromList.ToArray();
+                        dragFromAtlas.Remove(add);
+                        atlas.Add(add);
+
+                        dragFromList = null;
+                        dragFromAtlas = null;
+
+                        // Update views
+                        ClearAtlasView();
+                        OnAtlasListViewSelectionChange(atlasListView.selectedItems);
+                    });
 
                 var spriteSearchField = atlasView.Q<ToolbarSearchField>("SpriteSearchField");
                 spriteSearchField.RegisterValueChangedCallback(evt =>
@@ -204,23 +295,26 @@ namespace SpriteAtlasTools.Editor
                 });
 
                 // Resize texture view within container to keep aspect
-                var textureContainer = atlasView.Q<VisualElement>("TextureContainer");
-                textureContainer.RegisterCallback<GeometryChangedEvent>(
-                    evt =>
-                    {
-                        var size = evt.newRect.size;
+                if (atlasTexture)
+                {
+                    var textureContainer = atlasView.Q<VisualElement>("TextureContainer");
+                    textureContainer.RegisterCallback<GeometryChangedEvent>(
+                        evt =>
+                        {
+                            var size = evt.newRect.size;
 
-                        float scaleUpX = size.x / atlasTexture.width;
-                        float scaleUpY = size.y / atlasTexture.height;
+                            float scaleUpX = size.x / atlasTexture.width;
+                            float scaleUpY = size.y / atlasTexture.height;
 
-                        float scaleUp = Mathf.Min(scaleUpX, scaleUpY);
+                            float scaleUp = Mathf.Min(scaleUpX, scaleUpY);
 
-                        textureView.style.width = atlasTexture.width * scaleUp;
-                        textureView.style.height = atlasTexture.height * scaleUp;
+                            textureView.style.width = atlasTexture.width * scaleUp;
+                            textureView.style.height = atlasTexture.height * scaleUp;
 
-                        // To fix top listview from taking all available space, leaving none for others
-                        spriteListView.style.maxHeight = size.y;
-                    });
+                            // To fix top listview from taking all available space, leaving none for others
+                            spriteListView.style.maxHeight = size.y;
+                        });
+                }
 
                 // Select hovered sprite on mouse down
                 textureView.RegisterCallback<MouseDownEvent>(
@@ -269,53 +363,14 @@ namespace SpriteAtlasTools.Editor
                             if (string.IsNullOrEmpty(path))
                                 return;
 
-                            EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path));
+                            EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<Object>(path));
                         }
                     });
 
                 selectedAtlasViewParent.Add(atlasView);
             }
 
-            var atlasListView = root.Q<ListView>("AtlasListView");
-            atlasListView.makeItem = () => new AssetListItemElement(false);
-            atlasListView.bindItem = (element, i) =>
-                ((AssetListItemElement)element).AssetObject =
-                AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(atlasPaths[i]);
-            atlasListView.itemsSource = atlasPaths;
-            atlasListView.onSelectionChange += objects =>
-            {
-                ClearAtlasView();
-
-                var sorted = objects.OfType<string>().OrderBy(Path.GetFileNameWithoutExtension);
-
-                foreach (string atlasPath in sorted)
-                {
-                    var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
-
-                    // Will crash editor if packing happens right now
-                    EditorApplication.delayCall += () =>
-                    {
-                        SpriteAtlasUtility.PackAtlases(new[] { atlas }, EditorUserBuildSettings.activeBuildTarget);
-
-                        var getPreviewMethod = typeof(SpriteAtlasExtensions).GetMethod(
-                            "GetPreviewTextures",
-                            BindingFlags.NonPublic | BindingFlags.Static);
-
-                        var previewTextures = getPreviewMethod!.Invoke(null, new object[] { atlas }) as Texture2D[];
-                        if (previewTextures == null || previewTextures.Length == 0)
-                            return;
-
-                        var getSpritesMethod = typeof(SpriteAtlasExtensions).GetMethod(
-                            "GetPackedSprites",
-                            BindingFlags.NonPublic | BindingFlags.Static);
-
-                        var sprites = getSpritesMethod!.Invoke(null, new object[] { atlas }) as Sprite[];
-
-                        // TODO: Multiple preview textures display
-                        ShowSelectedAtlasView(atlas, previewTextures[0], sprites);
-                    };
-                }
-            };
+            atlasListView.onSelectionChange += OnAtlasListViewSelectionChange;
 
             void RefreshAtlasList()
             {
@@ -354,10 +409,10 @@ namespace SpriteAtlasTools.Editor
                 });
         }
 
-        private static IReadOnlyDictionary<UnityEngine.Object, IEnumerable<Sprite>> GetSpritesForPackables(
-            IEnumerable<UnityEngine.Object> packables)
+        private static IReadOnlyDictionary<Object, IEnumerable<Sprite>> GetSpritesForPackables(
+            IEnumerable<Object> packables)
         {
-            var outDict = new Dictionary<UnityEngine.Object, IEnumerable<Sprite>>();
+            var outDict = new Dictionary<Object, IEnumerable<Sprite>>();
 
             // Selecting textures can show in atlas texture view
             foreach (var obj in packables)
