@@ -22,7 +22,7 @@ namespace SpriteAtlasTools.Editor
         private SpriteAtlas dragFromAtlas;
         private List<Object> dragFromList;
 
-        [MenuItem("Tools/SpriteAtlases Editor")]
+        [MenuItem("Tools/SpriteAtlases/Viewer Window")]
         public static void ShowExample()
         {
             var wnd = GetWindow<SpriteAtlasesEditorWindow>();
@@ -248,7 +248,7 @@ namespace SpriteAtlasTools.Editor
                     selectedPackables.AddRange(objects.OfType<Object>());
                     selectedSprites.Clear();
 
-                    var spriteDict = GetSpritesForPackables(selectedPackables);
+                    var spriteDict = Helper.GetSpritesForPackables(selectedPackables);
                     var newSprites = spriteDict.SelectMany(kvp => kvp.Value);
                     selectedSprites.AddRange(newSprites);
 
@@ -344,7 +344,7 @@ namespace SpriteAtlasTools.Editor
                             textureView.MarkDirtyRepaint();
 
                             // Get selected packables from selected sprites
-                            var selectedIndices = GetSpritesForPackables(packables)
+                            var selectedIndices = Helper.GetSpritesForPackables(packables)
                                 // Get packables that contain sprites that are selected
                                 .Where(kvp => kvp.Value.Any(s => selectedSprites.Contains(s)))
                                 .Select(kvp => kvp.Key)
@@ -355,7 +355,7 @@ namespace SpriteAtlasTools.Editor
                         else if (evt.button == 1)
                         {
                             // Get packable from hovered sprite
-                            var hoveredPackable = GetSpritesForPackables(packables)
+                            var hoveredPackable = Helper.GetSpritesForPackables(packables)
                                 .First(kvp => kvp.Value.Any(s => s == hoveredSprite))
                                 .Key;
 
@@ -408,36 +408,7 @@ namespace SpriteAtlasTools.Editor
                     return fileName.ToLower().Contains(atlasSearchTerm.ToLower());
                 });
         }
-
-        private static IReadOnlyDictionary<Object, IEnumerable<Sprite>> GetSpritesForPackables(
-            IEnumerable<Object> packables)
-        {
-            var outDict = new Dictionary<Object, IEnumerable<Sprite>>();
-
-            // Selecting textures can show in atlas texture view
-            foreach (var obj in packables)
-            {
-                string assetPath = AssetDatabase.GetAssetPath(obj);
-
-                switch (obj)
-                {
-                    case Texture2D:
-                        var texSprites = AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Sprite>();
-                        outDict[obj] = texSprites;
-                        break;
-
-                    case DefaultAsset:
-                        var folderSprites = Directory.GetFiles(assetPath)
-                            .SelectMany(AssetDatabase.LoadAllAssetsAtPath)
-                            .OfType<Sprite>();
-                        outDict[obj] = folderSprites;
-                        break;
-                }
-            }
-
-            return outDict;
-        }
-
+        
         // From: https://codereview.stackexchange.com/questions/108857/point-inside-polygon-check
         private static bool IsPointInPolygon(Vector2 point, Vector2[] polygon)
         {
