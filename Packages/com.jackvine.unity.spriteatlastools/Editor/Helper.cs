@@ -34,15 +34,41 @@ namespace SpriteAtlasTools.Editor
                         break;
 
                     case DefaultAsset:
-                        var folderSprites = Directory.GetFiles(assetPath)
-                            .SelectMany(AssetDatabase.LoadAllAssetsAtPath)
-                            .OfType<Sprite>();
-                        outDict[obj] = folderSprites;
+                        var sprites = new List<Sprite>();
+                        GetPackablesForFolder(assetPath, sprites);
+                        outDict[obj] = sprites;
                         break;
                 }
             }
 
             return outDict;
+        }
+
+        private static void GetPackablesForFolder(string folderPath, List<Sprite> sprites)
+        {
+            var folderItems = Directory.GetFiles(folderPath)
+                .SelectMany(AssetDatabase.LoadAllAssetsAtPath);
+
+            foreach (var obj in folderItems)
+            {
+                string assetPath = AssetDatabase.GetAssetPath(obj);
+
+                switch (obj)
+                {
+                    case Texture2D:
+                        var texSprites = AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Sprite>();
+                        sprites.AddRange(texSprites);
+                        break;
+
+                    case DefaultAsset:
+                        GetPackablesForFolder(assetPath, sprites);
+                        break;
+                }
+            }
+
+            string[] folders = Directory.GetDirectories(folderPath);
+            foreach (string folder in folders)
+                GetPackablesForFolder(folder, sprites);
         }
     }
 }
