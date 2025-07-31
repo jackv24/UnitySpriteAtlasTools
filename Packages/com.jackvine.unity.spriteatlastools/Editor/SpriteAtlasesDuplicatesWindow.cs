@@ -18,16 +18,13 @@ namespace SpriteAtlasTools.Editor
         [MenuItem("Tools/SpriteAtlases/Find Duplicates")]
         public static void FindAllDuplicates()
         {
-            if (Selection.assetGUIDs.Length == 0)
+            if (!EditorUtility.DisplayDialog(
+                    "Find duplicates?",
+                    "Will scan whole project for duplicate sprites in atlases, this may take a while.",
+                    "Yes, scan project",
+                    "Cancel"))
             {
-                if (!EditorUtility.DisplayDialog(
-                        "Find duplicates?",
-                        "Will scan whole project for duplicate sprites in atlases, this may take a while.",
-                        "Yes, scan project",
-                        "Cancel"))
-                {
-                    return;
-                }
+                return;
             }
 
             var matches = MatchSpritesToAtlases()
@@ -123,33 +120,18 @@ namespace SpriteAtlasTools.Editor
         private static Dictionary<string, HashSet<string>> MatchSpritesToAtlases()
         {
             const string title = "Finding Duplicates";
-            
+
             EditorUtility.DisplayProgressBar(title, "Gathering sprite atlases", 0);
 
             // Make sure we have as much memory as possible
             Resources.UnloadUnusedAssets();
-            
+
+            // Create dictionary to relate sprites back to their atlases
+            var spriteDict = new Dictionary<string, HashSet<string>>();
+
             string[] atlasPaths = AssetDatabase.FindAssets("t:SpriteAtlas")
                 .Select(AssetDatabase.GUIDToAssetPath)
                 .ToArray();
-            
-            EditorUtility.DisplayProgressBar(title, "Gathering sprites", 0);
-
-            IEnumerable<string> spriteGuids;
-            string[] selectionGuids = Selection.assetGUIDs;
-            if (selectionGuids.Length > 0)
-            {
-                spriteGuids = selectionGuids;
-            }
-            else
-            {
-                spriteGuids = AssetDatabase.FindAssets("t:Sprite")
-                    .Where(guid => AssetDatabase.GUIDToAssetPath(guid).StartsWith("Assets"));
-            }
-            
-            // Create dictionary to relate sprites back to their atlases
-            var spriteDict = spriteGuids
-                .ToDictionary(guid => guid, _ => new HashSet<string>(1));
 
             for (int i = 0; i < atlasPaths.Length; i++)
             {
@@ -162,9 +144,12 @@ namespace SpriteAtlasTools.Editor
                     break;
                 }
 
-                // Get guids of all sprites that will be packed into atlas
                 var atlas = AssetDatabase.LoadAssetAtPath<SpriteAtlas>(atlasPath);
 
+                // Pack atlas so the editor stops sending warnings thinking there are duplicates when there isn't
+                SpriteAtlasUtility.PackAtlases(new[] { atlas }, EditorUserBuildSettings.activeBuildTarget);
+
+                // Get guids of all sprites that will be packed into atlas
                 var packedSpriteGuids = Helper.GetSpritesForPackables(atlas.GetPackables())
                     .SelectMany(kvp => kvp.Value)
                     .Select(AssetDatabase.GetAssetPath)
@@ -175,8 +160,11 @@ namespace SpriteAtlasTools.Editor
                 foreach (string packableGuid in packedSpriteGuids)
                 {
                     if (!spriteDict.TryGetValue(packableGuid, out var atlasRefList))
-                        continue;
-                    
+                    {
+                        atlasRefList = new HashSet<string>();
+                        spriteDict[packableGuid] = atlasRefList;
+                    }
+
                     atlasRefList.Add(atlasGuid);
                 }
 
